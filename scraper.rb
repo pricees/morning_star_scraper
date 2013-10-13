@@ -36,42 +36,44 @@ Capybara.current_driver    = :auto_dl
 class Scraper < Struct.new(:symbol)
   include Capybara::DSL
 
-  @already_kissed_the_ring
+  def debug(method, symbol, writer = STDOUT)
+    writer.puts "Something happened with ##{method} #{symbol} : #{Date.today}"
+  end
 
   def key_ratios
     visit "/ratios/r.html?t=#{symbol}"
     find(".export_list_financials").all('a').last.click
   rescue 
-    puts "Something happened with #key_ratios #{symbol}"
+    debug(:key_ratios, symbol)
   end
 
   def income_statement(type = :qtr)
     get_statement "/income-statement/is.html?t=", type
   rescue 
-    puts "Something happened with #income_statement #{symbol}"
+    debug(:income_statement, symbol)
   end
 
   def balance_sheet(type = :qtr)
     get_statement "/balance-sheet/bs.html?t=", type
   rescue 
-    puts "Something happened with #balance_sheet #{symbol}"
+    debug(:balance_sheet, symbol)
   end
 
   def cash_flow(type = :qtr)
     get_statement "/cash-flow/cf.html?t=", type
   rescue 
-    puts "Something happened with #cash_flow #{symbol}"
+    debug(:cash_flow, symbol)
   end
 
   def statements(type)
     income_statement(type)
     balance_sheet(type)
     cash_flow(type)
-    key_ratios
   end
 
   def get_statement(url_stub, type)
     visit "#{url_stub}#{symbol}"
+    sleep 1
 
     # Click the Statement Type" drop-down
     el = all("#menu_A").first
@@ -80,10 +82,18 @@ class Scraper < Struct.new(:symbol)
 
     if type == :yr
       # Click the Annual option in the dropdown overlay
-      all(:xpath, '//a[text()="Annual"]').last.click
+      begin
+        find('a', text: /annual/i).click   
+      rescue
+        all(:xpath, '//a[text()="Annual"]').last.click
+      end
     else
       # Click the Quarterly option in the dropdown overlay
-      find('a', text: /quarterly/i).click   
+      begin
+        find('a', text: /quarterly/i).click   
+      rescue
+        all(:xpath, '//a[text()="Quarterly"]').last.click
+      end
     end
 
     # Click the export link
@@ -92,11 +102,12 @@ class Scraper < Struct.new(:symbol)
     end
   end
 end
+
 if __FILE__ == $0
   $*.each do |symbol| 
-    [:yr, :qtr].each do |type| 
-      puts "#{symbol} #{type}"
-      Scraper.new(symbol).statements(type)
-    end
+    scraper = Scraper.new(symbol)
+   
+    [:yr, :qtr].each { |type| scraper.statements type }
+    scraper.key_ratios
   end
 end
